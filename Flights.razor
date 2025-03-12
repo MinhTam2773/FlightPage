@@ -1,0 +1,213 @@
+﻿@page "/flights"
+
+<h3>Flights Finder</h3>
+
+<div class="search-container">
+    <div class="search-item">
+        <label>From:</label>
+        <select @bind="from">
+            <option value="" disabled selected>Select...</option>
+            @foreach(string airport in AirportsManager.GetAirports())
+            {
+                <option value=@airport.Substring(0, 3)>@airport</option>
+            }
+        </select>
+    </div>
+
+    <div class="search-item">
+        <label>To:</label>
+        <select @bind="to">
+            <option value="" dissabled selected>Select...</option>
+            @foreach(string airport in AirportsManager.GetAirports())
+            {
+                <option value=@airport.Substring(0,3)>@airport</option>
+            }
+        </select>
+    </div>
+
+    <div class="search-item">
+        <label>Day:</label>
+        <select @bind="day">
+            <option value="" disabled selected>Select...</option>
+            @foreach(string day in FlightsManager.GetDays())
+            {
+                <option value=@day>@day</option>
+            }
+        </select>
+    </div>
+
+
+    <button class="find-button" @onclick="SearchFlight">Find flights</button>
+</div>
+
+<div class="flights-found-field">
+    <h3>Flights</h3>
+    @if (flightsFound.Count == 0)
+    {
+        <span class="formatted-field">Loading...</span>
+    }
+    else
+    {
+        <select class="formatted-field" @bind="selectedFlightStr">
+            <option value="" disabled selected>Please select</option>
+            @foreach (Flight flight in flightsFound)
+            {
+                <option value=@flight.ToString()>@flight.ToString()</option>
+            }
+        </select>
+        @if (!string.IsNullOrEmpty(selectedFlightStr))
+        {
+            UpdateSelectedFlight();
+        }
+    }
+</div>
+
+
+<h3>Reserve</h3>
+<div class="reservation-container">
+    <label>Flight code:</label>
+    <span class="formatted-field">@flightCode</span>
+
+    <label>Airline:</label>
+    <span class="formatted-field">@airline</span>
+
+    <label>Day:</label>
+    <span class="formatted-field">@dayOutput</span>
+
+    <label>Time:</label>
+    <span class="formatted-field">@time</span>
+
+    <label>Cost:</label>
+    <span class="formatted-field">@cost</span>
+
+    <label>Name</label>
+    <input type="text" class="formatted-field" placeholder="Name" @bind="name">
+
+    <label>Citizenship</label>
+    <input type="text" class="formatted-field" placeholder="Citizenship" @bind="citizenship">
+</div>
+
+<div class="reserve-button-container">
+    <button class="reserve-button" @onclick="ReserveFlight">Reserse</button>
+    <span>Reservation Code: @reservationCode </span>
+    <span class="error">@error</span>
+</div>
+
+<button @onclick="ClearReservations">Clear Reservations</button>
+<button @onclick="ShowReservations">Show Reservations</button>
+<br />
+
+
+<!--CODEHEREEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEEE-->
+@code {
+    private string from;
+    private string to;
+    private string day;
+    private string flightCode = "Flight Code";
+    private string airline = "Airline";
+    private string dayOutput = "Day";
+    private string time = "Time";
+    private string cost = "Cost";
+    public string name = "";
+    public string citizenship = "";
+    private string reservationCode = "";
+    public string error = "";
+
+    List<Flight> flights = FlightsManager.GetFlights();
+    HashSet<Flight> flightsFound = new HashSet<Flight>();
+    string selectedFlightStr;
+    Flight selectedFlight;
+    List<Reservation> reservations = ReservationManager.GetReservations();
+
+    public void SearchFlight()
+    {
+        selectedFlightStr = "";
+        flightsFound.Clear();
+        try
+        {
+            foreach (Flight flight in flights)
+            {
+                if (flight.Departure.ToLower() == from.ToLower() &&
+                    flight.Destination.ToLower() == to.ToLower() &&
+                    flight.DepartureDay.ToLower() == day.ToLower())
+                {
+                    flightsFound.Add(flight);
+                }
+            }
+            if (flightsFound.Count == 0)
+            {
+                throw new Exception("Flight not found");
+            }
+        }
+        catch (Exception e)
+        {
+            error = e.Message;
+        }
+    }
+
+    public void UpdateSelectedFlight()
+    {
+        string[] parts = selectedFlightStr.Split(",");
+        foreach (Flight flight in flightsFound)
+        {
+            if (flight.FlightCode == parts[0])
+            {
+                selectedFlight = flight;
+            }
+        }
+        flightCode = selectedFlight.FlightCode;
+        airline = selectedFlight.Airline;
+        dayOutput = selectedFlight.DepartureDay;
+        time = selectedFlight.DepartureTime;
+        cost = selectedFlight.Cost.ToString();
+    }
+
+    public void ReserveFlight()
+    {
+        try
+        {
+            if (name == "" || citizenship == "" || flightsFound.Count == 0)
+            {
+                throw new Exception("All fields must not be empty");
+            }
+            else
+            {
+                foreach (Reservation reservation in reservations)
+                {
+                    if (reservation.Name == name && reservation.Citizenship == citizenship)
+                    {
+                        throw new Exception("Flight already reserved");
+                    }
+                    else if (selectedFlight.Capacity == 0)
+                    {
+                        throw new Exception("the Flight is fully booked");
+                    }
+                }
+                reservationCode = ReservationManager.GenerateReservationCode();
+                selectedFlight.Capacity--;
+                Reservation newReservation = new Reservation(reservationCode, selectedFlight, name, citizenship, "Active");
+                reservations.Add(newReservation);
+                FlightsManager.SaveFlights(flights);
+                ReservationManager.SaveReservations(reservations);
+                error = ReservationManager.jsonString;
+            }
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+    }
+
+    public void ClearReservations()
+    {
+        reservations.Clear();
+        ReservationManager.SaveReservations(reservations);
+        ShowReservations();
+    }
+
+    public void ShowReservations()
+    {
+        ReservationManager.SaveReservations(reservations);
+        error = ReservationManager.jsonString;
+    }
+}
